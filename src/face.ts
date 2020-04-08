@@ -23,7 +23,7 @@ import {Box, createBox, disposeBox, scaleBox} from './box';
 /*
  * The object describing a face.
  */
-export interface NormalizedFace {
+export interface NormalizedAgeFace {
   /** The upper left-hand corner of the face. */
   topLeft: [number, number]|tf.Tensor1D;
   /** The lower right-hand corner of the face. */
@@ -32,7 +32,10 @@ export interface NormalizedFace {
   landmarks?: number[][]|tf.Tensor2D;
   /** Probability of the face detection. */
   probability?: number|tf.Tensor1D;
+  /**Predicted Age of the detected face */
+  age?: number;
 }
+
 
 // The blazeface model predictions containing unnormalized coordinates
 // for facial bounding box / landmarks.
@@ -112,7 +115,7 @@ function getInputTensorDimensions(input: tf.Tensor3D|ImageData|HTMLVideoElement|
 }
 
 function flipFaceHorizontal(
-    face: NormalizedFace, imageWidth: number): NormalizedFace {
+    face: NormalizedAgeFace, imageWidth: number): NormalizedAgeFace {
   let flippedTopLeft: [number, number]|tf.Tensor1D,
       flippedBottomRight: [number, number]|tf.Tensor1D,
       flippedLandmarks: number[][]|tf.Tensor2D;
@@ -160,7 +163,7 @@ function flipFaceHorizontal(
     }
   }
 
-  const flippedFace: NormalizedFace = {
+  const flippedFace: NormalizedAgeFace = {
     topLeft: flippedTopLeft,
     bottomRight: flippedBottomRight
   };
@@ -191,9 +194,149 @@ function scaleBoxFromPrediction(
   });
 }
 
+function range(num : number, start :  number, step : number){
+    return Array(num).fill(0).map((_, i) => start + (i * step))
+  }
+
+function getAge(tensor, params, fcageparams) {
+    const netinput = tf.tidy(() => {
+      const batchTensor = toBatchTensor(tensor,112, true)
+      const meanRgb = [122.782, 117.001, 104.298]
+      const normalized = normalize(batchTensor, meanRgb).div(tf.scalar(255)) as tf.Tensor4D
+  
+      let out = tf.relu(conv(normalized, params.entry_flow.conv_in, [2, 2]))
+      out = reductionBlock(out, params.entry_flow.reduction_block_0, false)
+      out = reductionBlock(out, params.entry_flow.reduction_block_1)
+  
+      range(2, 0, 1).forEach((idx) => {
+        out = mainBlock(out, params.middle_flow[`main_block_${idx}`])
+      })
+  
+      out = reductionBlock(out, params.exit_flow.reduction_block)
+      out = tf.relu(depthwiseSeparableConv(out, params.exit_flow.separable_conv, [1, 1]))
+      return out
+    })
+
+        const pooled = tf.avgPool(netinput, [7, 7], [2, 2], 'valid').as2D(netinput.shape[0], -1)
+        const age = fullyConnectedLayer(pooled, fcageparams).as1D()
+      
+        return age.dataSync()[0]
+  }
+  
+function padToSquare(
+    imgTensor,
+    isCenterImage = false
+  ){
+    return tf.tidy(() => {
+  
+      const [height, width] = imgTensor.shape.slice(1)
+      if (height === width) {
+        return imgTensor
+      }
+  
+      const dimDiff = Math.abs(height - width)
+      const paddingAmount = Math.round(dimDiff * (isCenterImage ? 0.5 : 1))
+      const paddingAxis = height > width ? 2 : 1
+  
+      const createPaddingTensor = (paddingAmount) => {
+        const paddingTensorShape = imgTensor.shape.slice()
+        paddingTensorShape[paddingAxis] = paddingAmount
+        return tf.fill(paddingTensorShape, 0)
+      }
+  
+      const paddingTensorAppend = createPaddingTensor(paddingAmount)
+      const remainingPaddingAmount = dimDiff - (paddingTensorAppend.shape[paddingAxis])
+  
+      const paddingTensorPrepend = isCenterImage && remainingPaddingAmount
+        ? createPaddingTensor(remainingPaddingAmount)
+        : null
+  
+      const tensorsToStack = [
+        paddingTensorPrepend,
+        imgTensor,
+        paddingTensorAppend
+      ]
+        .filter(t => !!t)
+        .map((t) => t.toFloat())
+      return tf.concat(tensorsToStack, paddingAxis)
+    })
+  }
+  
+function toBatchTensor(imgTensor, inputSize, isCenterInputs = true){
+  
+    return tf.tidy(() => {
+  
+          imgTensor = padToSquare(imgTensor, isCenterInputs)
+          if (imgTensor.shape[1] !== inputSize || imgTensor.shape[2] !== inputSize) {
+            imgTensor = tf.image.resizeBilinear(imgTensor, [inputSize, inputSize])
+          }
+  
+          const inputTensors =  imgTensor.as3D(inputSize, inputSize, 3)
+      const batchTensor = inputTensors.toFloat().as4D(1, inputSize, inputSize, 3)
+  
+      return batchTensor
+    })
+  }
+function fullyConnectedLayer(
+    x,
+    params
+  ){
+    return tf.tidy(() =>
+      tf.add(
+        tf.matMul(x, params.weights),
+        params.bias
+      )
+    )
+  }
+  
+function depthwiseSeparableConv(
+    x,
+    params,
+    stride
+  ){
+    return tf.tidy(() => {
+      let out = tf.separableConv2d(x, params.depthwise_filter, params.pointwise_filter, stride, 'same')
+      out = tf.add(out, params.bias)
+      return out
+    })
+  }
+  
+function normalize(x, meanRgb){
+    return tf.tidy(() => {
+      const [r, g, b] = meanRgb
+      const avg_r = tf.fill([...x.shape.slice(0, 3), 1], r)
+      const avg_g = tf.fill([...x.shape.slice(0, 3), 1], g)
+      const avg_b = tf.fill([...x.shape.slice(0, 3), 1], b)
+      const avg_rgb = tf.concat([avg_r, avg_g, avg_b], 3)
+  
+      return tf.sub(x, avg_rgb)
+    })
+  }
+  
+  function conv(x: tf.Tensor4D, params, stride: [number, number]): tf.Tensor4D {
+    return tf.add(tf.conv2d(x, params.filters, stride, 'same'), params.bias)
+  }
+  
+  function reductionBlock(x: tf.Tensor4D, params, isActivateInput: boolean = true): tf.Tensor4D {
+    let out = isActivateInput ? tf.relu(x) : x
+    out = depthwiseSeparableConv(out, params.separable_conv0, [1, 1])
+    out = depthwiseSeparableConv(tf.relu(out),  params.separable_conv1, [1, 1])
+    out = tf.maxPool(out, [3, 3], [2, 2], 'same')
+    out = tf.add(out, conv(x,  params.expansion_conv, [2, 2]))
+    return out
+  }
+  
+  function mainBlock(x: tf.Tensor4D, params): tf.Tensor4D {
+    let out = depthwiseSeparableConv(tf.relu(x), params.separable_conv0, [1, 1])
+    out = depthwiseSeparableConv(tf.relu(out), params.separable_conv1, [1, 1])
+    out = depthwiseSeparableConv(tf.relu(out), params.separable_conv2, [1, 1])
+    out = tf.add(out, x)
+    return out
+  }
+
 export class BlazeFaceAgeModel {
   private blazeFaceModel: tfconv.GraphModel;
-  private ageModelParams : Object;
+  private ageModelParams;
   private width: number;
   private height: number;
   private maxFaces: number;
@@ -205,7 +348,7 @@ export class BlazeFaceAgeModel {
   private scoreThreshold: number;
 
   constructor(
-      model: tfconv.GraphModel, ageparams : Object, width: number, height: number, maxFaces: number,
+      model: tfconv.GraphModel, ageparams, width: number, height: number, maxFaces: number,
       iouThreshold: number, scoreThreshold: number) {
     this.blazeFaceModel = model;
     this.ageModelParams = ageparams;
@@ -328,6 +471,7 @@ export class BlazeFaceAgeModel {
     };
   }
 
+
   /**
    * Returns an array of faces in an image.
    *
@@ -352,7 +496,10 @@ export class BlazeFaceAgeModel {
       input: tf.Tensor3D|ImageData|HTMLVideoElement|HTMLImageElement|
       HTMLCanvasElement,
       returnTensors = false, flipHorizontal = false,
-      annotateBoxes = true): Promise<NormalizedFace[]> {
+      annotateBoxes = true): Promise<NormalizedAgeFace[]> {
+
+    const offcanvas = new OffscreenCanvas(1,1)
+    const offcontext = offcanvas.getContext('2d')
     const [, width] = getInputTensorDimensions(input);
     const image = tf.tidy(() => {
       if (!(input instanceof tf.Tensor)) {
@@ -368,7 +515,7 @@ export class BlazeFaceAgeModel {
       return boxes.map((face: BlazeFacePrediction|Box) => {
         const scaledBox =
             scaleBoxFromPrediction(face, scaleFactor as tf.Tensor1D);
-        let normalizedFace: NormalizedFace = {
+        let NormalizedAgeFace: NormalizedAgeFace = {
           topLeft: scaledBox.slice([0], [2]) as tf.Tensor1D,
           bottomRight: scaledBox.slice([2], [2]) as tf.Tensor1D
         };
@@ -382,24 +529,24 @@ export class BlazeFaceAgeModel {
 
           const normalizedLandmarks: tf.Tensor2D =
               landmarks.add(anchor).mul(scaleFactor);
-          normalizedFace.landmarks = normalizedLandmarks;
-          normalizedFace.probability = probability;
+          NormalizedAgeFace.landmarks = normalizedLandmarks;
+          NormalizedAgeFace.probability = probability;
         }
 
         if (flipHorizontal) {
-          normalizedFace = flipFaceHorizontal(normalizedFace, width);
+          NormalizedAgeFace = flipFaceHorizontal(NormalizedAgeFace, width);
         }
-        return normalizedFace;
+        return NormalizedAgeFace;
       });
     }
-
+    
     return Promise.all(boxes.map(async (face: BlazeFacePrediction) => {
       const scaledBox =
           scaleBoxFromPrediction(face, scaleFactor as [number, number]);
-      let normalizedFace: NormalizedFace;
+      let NormalizedAgeFace: NormalizedAgeFace;
       if (!annotateBoxes) {
         const boxData = await scaledBox.array();
-        normalizedFace = {
+        NormalizedAgeFace = {
           topLeft: (boxData as number[]).slice(0, 2) as [number, number],
           bottomRight: (boxData as number[]).slice(2) as [number, number]
         };
@@ -417,7 +564,7 @@ export class BlazeFaceAgeModel {
                        (landmark[1] + anchor[1]) * scaleFactorY
                      ]));
 
-        normalizedFace = {
+        NormalizedAgeFace = {
           topLeft: (boxData as number[]).slice(0, 2) as [number, number],
           bottomRight: (boxData as number[]).slice(2) as [number, number],
           landmarks: scaledLandmarks,
@@ -432,10 +579,30 @@ export class BlazeFaceAgeModel {
       scaledBox.dispose();
 
       if (flipHorizontal) {
-        normalizedFace = flipFaceHorizontal(normalizedFace, width);
+        NormalizedAgeFace = flipFaceHorizontal(NormalizedAgeFace, width);
       }
 
-      return normalizedFace;
+      offcanvas.width =  this.inputSizeData[0]
+      offcanvas.height =  this.inputSizeData[1]
+
+      if(input instanceof ImageData){
+        offcontext.putImageData(input, 0,0)
+        const start = NormalizedAgeFace.topLeft;
+        const end = NormalizedAgeFace.bottomRight;
+        const size = [end[0] - start[0], end[1] - start[1]];
+        offcontext.drawImage(offcanvas, start[0], start[1] ,size[0], size[1], 0, 0, size[0], size[1])
+        
+        const data2 = offcontext.getImageData(0,0, size[0], size[1])
+    
+        await tf.setBackend('webgl')
+        tf.engine().startScope()
+        let tensor = tf.browser.fromPixels(data2).expandDims(0).toFloat()
+
+        NormalizedAgeFace.age = getAge(tensor, this.ageModelParams.FaceFeatureParams.params, this.ageModelParams.classifierParams.params.fc.age)
+      }
+
+
+      return NormalizedAgeFace;
     }));
   }
 }

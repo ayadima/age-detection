@@ -269,4 +269,4 @@ export async function load(blazepath:string, agepath:string,{
   return model;
 }
 
-export {NormalizedFace, BlazeFaceAgeModel, BlazeFacePrediction} from './face';
+export {NormalizedAgeFace, BlazeFaceAgeModel, BlazeFacePrediction} from './face';
