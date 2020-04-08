@@ -191,8 +191,9 @@ function scaleBoxFromPrediction(
   });
 }
 
-export class BlazeFaceModel {
+export class BlazeFaceAgeModel {
   private blazeFaceModel: tfconv.GraphModel;
+  private ageModelParams : Object;
   private width: number;
   private height: number;
   private maxFaces: number;
@@ -204,9 +205,10 @@ export class BlazeFaceModel {
   private scoreThreshold: number;
 
   constructor(
-      model: tfconv.GraphModel, width: number, height: number, maxFaces: number,
+      model: tfconv.GraphModel, ageparams : Object, width: number, height: number, maxFaces: number,
       iouThreshold: number, scoreThreshold: number) {
     this.blazeFaceModel = model;
+    this.ageModelParams = ageparams;
     this.width = width;
     this.height = height;
     this.maxFaces = maxFaces;
@@ -220,6 +222,10 @@ export class BlazeFaceModel {
 
     this.iouThreshold = iouThreshold;
     this.scoreThreshold = scoreThreshold;
+  }
+
+  getAgeModelParams(){
+      return this.ageModelParams;
   }
 
   async getBoundingBoxes(
