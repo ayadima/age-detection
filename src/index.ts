@@ -24,11 +24,11 @@ async function fetchNetWeights(uri: string): Promise<Float32Array> {
 }
 
 async function fetchOrThrow(
-  url: string,
+  uri: string,
   init?: RequestInit
 ): Promise<Response> {
 
-  const res = await fetch(url, init)
+  const res = await fetch(uri, init)
   if (!(res.status < 400)) {
     throw new Error(`failed to fetch: (${res.status}) ${res.statusText}, from url: ${res.url}`)
   }
