@@ -498,6 +498,7 @@ export class BlazeFaceAgeModel {
       returnTensors = false, flipHorizontal = false,
       annotateBoxes = true): Promise<NormalizedAgeFace[]> {
 
+    const originalinput = input
     const offcanvas = new OffscreenCanvas(1,1)
     const offcontext = offcanvas.getContext('2d')
     const [, width] = getInputTensorDimensions(input);
@@ -570,8 +571,9 @@ export class BlazeFaceAgeModel {
         let topLeftdata = (boxData as number[]).slice(0, 2) as [number, number];
         let bottomRightdata = (boxData as number[]).slice(2) as [number, number];
 
-        if(input instanceof ImageData){
-            offcontext.putImageData(input, 0,0)
+        console.info('type', typeof(originalinput))
+        if(originalinput instanceof ImageData){
+            offcontext.putImageData(originalinput, 0,0)
             const start = topLeftdata;
             const end = bottomRightdata;
             const size = [end[0] - start[0], end[1] - start[1]];
@@ -582,6 +584,7 @@ export class BlazeFaceAgeModel {
             let tensor = tf.browser.fromPixels(data2).expandDims(0).toFloat()
                
             age = getAge(tensor, this.ageModelParams.FaceFeatureParams.params, this.ageModelParams.classifierParams.params.fc.age)
+            offcontext.clearRect(0,0,offcanvas.width, offcanvas.height)
             }
 
         NormalizedAgeFace = {
