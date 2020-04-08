@@ -571,7 +571,6 @@ export class BlazeFaceAgeModel {
         let bottomRightdata = (boxData as number[]).slice(2) as [number, number];
 
         if(input instanceof ImageData){
-            console.warn('here')
             offcontext.putImageData(input, 0,0)
             const start = topLeftdata;
             const end = bottomRightdata;
