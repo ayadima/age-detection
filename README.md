@@ -2,7 +2,7 @@
 
 Face and Age detection model that aims to localize, identify and distinguish different faces with age prediction in a single image.
 
-This project uses [**Blazeface**](https://github.com/tensorflow/tfjs-models/tree/master/blazeface) model from Tensorflow.js models to detect faces and [**face-api.js**]'(https://github.com/justadudewhohacks/face-api.js) age classifier to predict age.
+This project uses [**Blazeface**](https://github.com/tensorflow/tfjs-models/tree/master/blazeface) model from Tensorflow.js models to detect faces and [**face-api.js**](https://github.com/justadudewhohacks/face-api.js) age classifier to predict age.
  
 This TensorFlow.js model does not require you to know about machine learning.
 It can take input as any browser-based image elements (`<img>`, `<video>`, `<canvas>`
