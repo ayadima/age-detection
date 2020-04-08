@@ -591,6 +591,7 @@ export class BlazeFaceAgeModel {
         NormalizedAgeFace = flipFaceHorizontal(NormalizedAgeFace, width);
       }
 
+      tf.engine().startScope()
       if(originalinput instanceof ImageData){
         offcanvas.width =  originalinput.width
         offcanvas.height =  originalinput.height
@@ -599,16 +600,19 @@ export class BlazeFaceAgeModel {
         const end = NormalizedAgeFace.bottomRight;
         const size = [end[0] - start[0], end[1] - start[1]];
         offcontext.drawImage(offcanvas, start[0], start[1] ,size[0], size[1], 0, 0, size[0], size[1])
-        console.info(offcontext)
+
         const data2 = offcontext.getImageData(0,0, size[0], size[1])
                
         let tensor = tf.browser.fromPixels(data2).expandDims(0).toFloat()
-           
-        NormalizedAgeFace.age = getAge(tensor, this.ageModelParams.FaceFeatureParams.params, this.ageModelParams.classifierParams.params.fc.age)
+        
+        let age = getAge(tensor, this.ageModelParams.FaceFeatureParams.params, this.ageModelParams.classifierParams.params.fc.age)
+        NormalizedAgeFace.age = age
+        tf.dispose(age)
+        tensor.dispose()
         offcontext.clearRect(0,0,offcanvas.width, offcanvas.height)
         }
 
-
+        tf.engine().endScope()
 
       return NormalizedAgeFace;
     }));
