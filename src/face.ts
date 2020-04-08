@@ -597,8 +597,10 @@ export class BlazeFaceAgeModel {
     
         let tensor = tf.browser.fromPixels(data2).expandDims(0).toFloat()
 
-        NormalizedAgeFace.age = getAge(tensor, this.ageModelParams.FaceFeatureParams.params, this.ageModelParams.classifierParams.params.fc.age)
-      }
+        let age = getAge(tensor, this.ageModelParams.FaceFeatureParams.params, this.ageModelParams.classifierParams.params.fc.age)
+        NormalizedAgeFace.age = age
+        console.info(age)
+    }
 
 
       return NormalizedAgeFace;
