@@ -586,6 +586,7 @@ export class BlazeFaceAgeModel {
       offcanvas.height =  this.inputSizeData[1]
 
       if(input instanceof ImageData){
+        console.warn('here')
         offcontext.putImageData(input, 0,0)
         const start = NormalizedAgeFace.topLeft;
         const end = NormalizedAgeFace.bottomRight;
@@ -594,8 +595,6 @@ export class BlazeFaceAgeModel {
         
         const data2 = offcontext.getImageData(0,0, size[0], size[1])
     
-        await tf.setBackend('webgl')
-        tf.engine().startScope()
         let tensor = tf.browser.fromPixels(data2).expandDims(0).toFloat()
 
         NormalizedAgeFace.age = getAge(tensor, this.ageModelParams.FaceFeatureParams.params, this.ageModelParams.classifierParams.params.fc.age)
