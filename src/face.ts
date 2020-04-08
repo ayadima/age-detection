@@ -564,11 +564,33 @@ export class BlazeFaceAgeModel {
                        (landmark[1] + anchor[1]) * scaleFactorY
                      ]));
 
+        offcanvas.width =  this.inputSizeData[0]
+        offcanvas.height =  this.inputSizeData[1]
+        let age = 0;
+        let topLeftdata = (boxData as number[]).slice(0, 2) as [number, number];
+        let bottomRightdata = (boxData as number[]).slice(2) as [number, number];
+
+        if(input instanceof ImageData){
+            console.warn('here')
+            offcontext.putImageData(input, 0,0)
+            const start = topLeftdata;
+            const end = bottomRightdata;
+            const size = [end[0] - start[0], end[1] - start[1]];
+            offcontext.drawImage(offcanvas, start[0], start[1] ,size[0], size[1], 0, 0, size[0], size[1])
+                       
+            const data2 = offcontext.getImageData(0,0, size[0], size[1])
+                   
+            let tensor = tf.browser.fromPixels(data2).expandDims(0).toFloat()
+               
+            age = getAge(tensor, this.ageModelParams.FaceFeatureParams.params, this.ageModelParams.classifierParams.params.fc.age)
+            }
+
         NormalizedAgeFace = {
-          topLeft: (boxData as number[]).slice(0, 2) as [number, number],
-          bottomRight: (boxData as number[]).slice(2) as [number, number],
+          topLeft: topLeftdata,
+          bottomRight: bottomRightdata,
           landmarks: scaledLandmarks,
-          probability: probabilityData as number
+          probability: probabilityData as number,
+          age: age as number
         };
 
         disposeBox(face.box);
@@ -581,26 +603,6 @@ export class BlazeFaceAgeModel {
       if (flipHorizontal) {
         NormalizedAgeFace = flipFaceHorizontal(NormalizedAgeFace, width);
       }
-
-      offcanvas.width =  this.inputSizeData[0]
-      offcanvas.height =  this.inputSizeData[1]
-
-      if(input instanceof ImageData){
-        console.warn('here')
-        offcontext.putImageData(input, 0,0)
-        const start = NormalizedAgeFace.topLeft;
-        const end = NormalizedAgeFace.bottomRight;
-        const size = [end[0] - start[0], end[1] - start[1]];
-        offcontext.drawImage(offcanvas, start[0], start[1] ,size[0], size[1], 0, 0, size[0], size[1])
-        
-        const data2 = offcontext.getImageData(0,0, size[0], size[1])
-    
-        let tensor = tf.browser.fromPixels(data2).expandDims(0).toFloat()
-
-        let age = getAge(tensor, this.ageModelParams.FaceFeatureParams.params, this.ageModelParams.classifierParams.params.fc.age)
-        NormalizedAgeFace.age = age
-        console.info(age)
-    }
 
 
       return NormalizedAgeFace;
