@@ -1,23 +1,7 @@
-/**
- * @license
- * Copyright 2019 Google LLC. All Rights Reserved.
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- * =============================================================================
- */
-
 import * as tfconv from '@tensorflow/tfjs-converter';
 import * as tf from '@tensorflow/tfjs-core';
 import {BlazeFaceAgeModel} from './face';
+import * as native from '@tensorflow/tfjs-react-native'
 
 async function fetchNetWeights(uri: string): Promise<Float32Array> {
   return new Float32Array(await (await fetchOrThrow(uri)).arrayBuffer())
@@ -243,7 +227,7 @@ function extractFCParamsFactory(
  *  `scoreThreshold` The threshold for deciding when to remove boxes based
  * on score.
  */
-export async function load(blazepath:string, agepath:string,{
+export async function load(blazepath:string, agepath:string, blazemodelJson? : tf.io.ModelJSON, blazemodelWeights? : number, agemodelWeights? : number,{
   maxFaces = 10,
   inputWidth = 128,
   inputHeight = 128,
@@ -255,13 +239,19 @@ export async function load(blazepath:string, agepath:string,{
         `Cannot find TensorFlow.js. If you are using a <script> tag, please ` +
         `also include @tensorflow/tfjs on the page before using this model.`);
   }
+  let blazeface;
+  let weights;
+  let ageparams;
 
+  if(blazemodelJson && blazemodelWeights && agemodelWeights){
+    blazeface = await tfconv.loadGraphModel(native.bundleResourceIO(blazemodelJson, blazemodelWeights));
+    ageparams = extractParams(new Float32Array(agemodelWeights))
+  } else {
+    blazeface = await tfconv.loadGraphModel(blazepath);
+    weights = await fetchNetWeights(agepath)
+    ageparams = extractParams(weights)
+  }
 
-  const blazeface =
-      await tfconv.loadGraphModel(blazepath);
-  
-  const weights = await fetchNetWeights(agepath)
-  const ageparams = extractParams(weights)
 
   const model = new BlazeFaceAgeModel(
       blazeface, ageparams, inputWidth, inputHeight, maxFaces, iouThreshold,
