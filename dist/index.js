@@ -212,6 +212,28 @@ function load(blazepath, agepath, _a) {
     });
 }
 exports.load = load;
+function loadNative(blazehandler, ageweights, _a) {
+    var _b = _a === void 0 ? {} : _a, _c = _b.maxFaces, maxFaces = _c === void 0 ? 10 : _c, _d = _b.inputWidth, inputWidth = _d === void 0 ? 128 : _d, _e = _b.inputHeight, inputHeight = _e === void 0 ? 128 : _e, _f = _b.iouThreshold, iouThreshold = _f === void 0 ? 0.3 : _f, _g = _b.scoreThreshold, scoreThreshold = _g === void 0 ? 0.75 : _g;
+    return __awaiter(this, void 0, void 0, function () {
+        var blazeface, ageparams, model;
+        return __generator(this, function (_h) {
+            switch (_h.label) {
+                case 0:
+                    if (tfconv == null) {
+                        throw new Error("Cannot find TensorFlow.js. If you are using a <script> tag, please " +
+                            "also include @tensorflow/tfjs on the page before using this model.");
+                    }
+                    return [4, tfconv.loadGraphModel(blazehandler)];
+                case 1:
+                    blazeface = _h.sent();
+                    ageparams = extractParams(new Float32Array(ageweights));
+                    model = new face_1.BlazeFaceAgeModel(blazeface, ageparams, inputWidth, inputHeight, maxFaces, iouThreshold, scoreThreshold);
+                    return [2, model];
+            }
+        });
+    });
+}
+exports.loadNative = loadNative;
 var face_2 = require("./face");
 exports.BlazeFaceAgeModel = face_2.BlazeFaceAgeModel;
 //# sourceMappingURL=index.js.map

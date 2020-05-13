@@ -1,7 +1,6 @@
 import * as tfconv from '@tensorflow/tfjs-converter';
 import * as tf from '@tensorflow/tfjs-core';
 import {BlazeFaceAgeModel} from './face';
-import * as native from '@tensorflow/tfjs-react-native'
 
 async function fetchNetWeights(uri: string): Promise<Float32Array> {
   return new Float32Array(await (await fetchOrThrow(uri)).arrayBuffer())
@@ -227,7 +226,7 @@ function extractFCParamsFactory(
  *  `scoreThreshold` The threshold for deciding when to remove boxes based
  * on score.
  */
-export async function load(blazepath:string, agepath:string, blazemodelJson? : tf.io.ModelJSON, blazemodelWeights? : number, agemodelWeights? : number,{
+export async function load(blazepath:string, agepath:string,{
   maxFaces = 10,
   inputWidth = 128,
   inputHeight = 128,
@@ -239,19 +238,32 @@ export async function load(blazepath:string, agepath:string, blazemodelJson? : t
         `Cannot find TensorFlow.js. If you are using a <script> tag, please ` +
         `also include @tensorflow/tfjs on the page before using this model.`);
   }
-  let blazeface;
-  let weights;
-  let ageparams;
 
-  if(blazemodelJson && blazemodelWeights && agemodelWeights){
-    blazeface = await tfconv.loadGraphModel(native.bundleResourceIO(blazemodelJson, blazemodelWeights));
-    ageparams = extractParams(new Float32Array(agemodelWeights))
-  } else {
-    blazeface = await tfconv.loadGraphModel(blazepath);
-    weights = await fetchNetWeights(agepath)
-    ageparams = extractParams(weights)
+  const blazeface = await tfconv.loadGraphModel(blazepath);
+  const weights = await fetchNetWeights(agepath)
+  const ageparams = extractParams(weights)
+
+  const model = new BlazeFaceAgeModel(
+      blazeface, ageparams, inputWidth, inputHeight, maxFaces, iouThreshold,
+      scoreThreshold);
+  return model;
+}
+
+export async function loadNative(blazehandler:tf.io.IOHandler, ageweights:number,{
+  maxFaces = 10,
+  inputWidth = 128,
+  inputHeight = 128,
+  iouThreshold = 0.3,
+  scoreThreshold = 0.75
+} = {}): Promise<BlazeFaceAgeModel> {
+  if (tfconv == null) {
+    throw new Error(
+        `Cannot find TensorFlow.js. If you are using a <script> tag, please ` +
+        `also include @tensorflow/tfjs on the page before using this model.`);
   }
 
+  const blazeface = await tfconv.loadGraphModel(blazehandler);
+  const ageparams = extractParams(new Float32Array(ageweights))
 
   const model = new BlazeFaceAgeModel(
       blazeface, ageparams, inputWidth, inputHeight, maxFaces, iouThreshold,
